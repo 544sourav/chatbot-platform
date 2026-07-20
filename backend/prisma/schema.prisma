@@ -1,0 +1,110 @@
+
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  directUrl  = env("DIRECT_URL")
+  extensions = [pg_stat_statements, pgcrypto, supabase_vault, uuid_ossp(map: "uuid-ossp"), vector]
+}
+
+model Company {
+  id        String   @id @default(uuid())
+  name      String
+  apiKey    String   @unique @default(uuid())
+  createdAt DateTime @default(now())
+
+  bots      Bot[]
+}
+
+model Bot {
+  id       String   @id @default(uuid())
+  companyID String
+  company   Company  @relation(fields: [companyID], references: [id], onDelete: Cascade)
+  
+  name      String
+  greetingMessage String @default("Hello! How can I assist you today?") 
+  theme     String   @default("#6366f1")
+  persona   String  @default("friendly and concise")
+  fallbackMessage String @default("I'm not sure about that — would you like to talk to a human?")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  documents Document[]
+  conversations Conversation[]
+}
+
+enum DocumentSourceType {
+  PDF
+  URL
+  TEXT
+}
+
+enum DocumentStatus {
+  PENDING
+  PROCESSING
+  READY
+  FAILED
+}
+
+model Document {
+  id        String @id @default(uuid())
+  botID     String
+  bot       Bot    @relation(fields: [botID], references: [id], onDelete: Cascade)
+
+  sourceType DocumentSourceType
+  sourceRef  String
+  status     DocumentStatus @default(PENDING)
+  errorMessage String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  chunks Chunk[]
+}
+
+
+model Chunk {
+  id        String   @id @default(uuid())
+  documentID String
+  document   Document @relation(fields: [documentID], references: [id], onDelete: Cascade)
+  botID     String
+  content   String
+
+  embedding Unsupported("vector(768)")?
+
+  createdAt DateTime @default(now())
+}
+
+model Conversation {
+  id        String   @id @default(uuid())
+  botID     String
+  bot       Bot      @relation(fields: [botID], references: [id], onDelete: Cascade)
+  visitorID String
+
+  createdAt DateTime @default(now())
+
+  messages  Message[]
+}
+
+enum MessageRole {
+  USER
+  ASSISTANT
+}
+
+model Message {
+  id             String   @id @default(uuid())
+  conversationID String
+  conversation   Conversation @relation(fields: [conversationID], references: [id], onDelete: Cascade)
+  role           MessageRole
+  content        String
+  isFallback     Boolean  @default(false)
+
+  createdAt DateTime @default(now())
+}
